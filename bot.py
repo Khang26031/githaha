@@ -8,7 +8,7 @@ from telebot import types
 from flask import Flask, request
 
 # ======================================================================================
-# PHẦN CODE GET TOKEN (KHÔNG THAY ĐỔI)
+# PHẦN CODE GET TOKEN
 # ======================================================================================
 class FacebookTokenGenerator:
     def __init__(self, app_id, client_id, cookie):
@@ -137,72 +137,12 @@ def get_message():
     bot.process_new_updates([update])
     return "!", 200
 
-# THAY ĐỔI Ở ĐÂY: Route này chỉ để kiểm tra xem bot có "sống" không
+# Route này chỉ để kiểm tra xem bot có "sống" không
 @app.route("/")
 def health_check():
     return "Bot is alive and running!", 200
 
+# Hàm này đặt cuối cùng để bắt các tin nhắn không hợp lệ
 @bot.message_handler(func=lambda message: True)
 def handle_other_messages(message):
     bot.send_message(message.chat.id, "Lệnh không hợp lệ. Vui lòng sử dụng /start hoặc /help.")
-
-def handle_get_token_callback(call):
-    msg = bot.send_message(call.message.chat.id, "Vui lòng gửi **Cookie Facebook** của bạn vào đây:", parse_mode="Markdown")
-    bot.register_next_step_handler(msg, process_cookie_step)
-
-@bot.message_handler(commands=['gettoken'])
-def get_token_command(message):
-    msg = bot.send_message(message.chat.id, "Vui lòng gửi **Cookie Facebook** của bạn vào đây:", parse_mode="Markdown")
-    bot.register_next_step_handler(msg, process_cookie_step)
-
-def process_cookie_step(message):
-    chat_id = message.chat.id
-    msg_wait = bot.send_message(chat_id, "🔍 Đang xử lý, vui lòng chờ trong giây lát...")
-    try:
-        cookie_input = message.text
-        generator = FacebookTokenGenerator(app_id="275254692598279", client_id="350685531728", cookie=cookie_input)
-        token_result = generator.GetToken()
-        bot.delete_message(chat_id, msg_wait.message_id)
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        btn_direct = types.InlineKeyboardButton("Tại Chat", callback_data=f"send_direct|{token_result}")
-        btn_file = types.InlineKeyboardButton("Nhận File (.txt)", callback_data=f"send_file|{token_result}")
-        markup.add(btn_direct, btn_file)
-        bot.send_message(chat_id, "✅ Lấy token thành công! Bạn muốn nhận token bằng cách nào?", reply_markup=markup)
-    except ValueError as e:
-        bot.edit_message_text(f"❌ Lỗi!\n\n{str(e)}", chat_id, msg_wait.message_id)
-    except Exception as e:
-        bot.edit_message_text(f"❌ Đã có lỗi hệ thống xảy ra!\n\n`{str(e)}`", chat_id, msg_wait.message_id, parse_mode="Markdown")
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("send_"))
-def handle_output_format_callback(call):
-    chat_id = call.message.chat.id
-    action, token = call.data.split("|", 1)
-    bot.edit_message_text("Yêu cầu của bạn đã được xử lý!", chat_id, call.message.message_id)
-    if action == "send_direct":
-        bot.send_message(chat_id, f"**Token của bạn là:**\n\n`{token}`", parse_mode="Markdown")
-    elif action == "send_file":
-        try:
-            file_path = f"token_{chat_id}.txt"
-            with open(file_path, "w", encoding="utf-8") as f: f.write(token)
-            with open(file_path, "rb") as f: bot.send_document(chat_id, f, caption="Đây là file chứa token của bạn.")
-            os.remove(file_path)
-        except Exception as e:
-            bot.send_message(chat_id, f"Lỗi khi tạo file: {str(e)}")
-
-@app.route('/' + BOT_TOKEN, methods=['POST'])
-def get_message():
-    json_string = request.get_data().decode('utf-8')
-    update = telebot.types.Update.de_json(json_string)
-    bot.process_new_updates([update])
-    return "!", 200
-
-@app.route("/")
-def webhook():
-    bot.remove_webhook()
-    bot.set_webhook(url=f'https://{request.host}/{BOT_TOKEN}')
-    return "Webhook đã được thiết lập thành công!", 200
-
-@bot.message_handler(func=lambda message: True)
-def handle_other_messages(message):
-    bot.send_message(message.chat.id, "Lệnh không hợp lệ. Vui lòng sử dụng /start hoặc /help.")
-
